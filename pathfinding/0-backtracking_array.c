@@ -1,101 +1,109 @@
 #include "pathfinding.h"
 
 /**
- * backtracking_array - Implements a backtracking algorithm to find a path
- * @map: The 2D map (grid)
- * @rows: Total number of rows
- * @cols: Total number of columns
- * @start: Starting point on the map
- * @target: Target point we're trying to reach
- *
- * Return: A queue of points representing the path
+ * point_push - program that adds a point to the front of the queue
+ * with given x and y coordinates
+ * @queue: the double pointer to the queue where the point will be added
+ * @x: the x-coordinate of the point to add
+ * @y: the y-coordinate of the point to add
+ * Return: 1 on success, 0 on failure
  */
-queue_t *backtracking_array(char **map, int rows, int cols,
-			    point_t const *start, point_t const *target)
+
+int point_push(queue_t **queue, int x, int y)
 {
-	queue_t *path = queue_create();
-	queue_t *reverse_path = queue_create();
-	char **mymap;
-	int i;
-	point_t *point;
+	point_t *p;
 
-	if (!path || !reverse_path)
-		return (NULL);
+	p = malloc(sizeof(*p));
+	if (!p)
+		return (0);
+	p->x = x;
+	p->y = y;
+	queue_push_front(*queue, p);
 
-	mymap = malloc(rows * sizeof(char *));
-	if (!mymap)
-		exit(1);
-
-	for (i = 0; i < rows; i++)
-	{
-		mymap[i] = malloc(cols + 1);
-		if (!mymap[i])
-			exit(1);
-		strcpy(mymap[i], map[i]);
-	}
-
-	if (backtrack(mymap, rows, cols, target, start->x, start->y, path))
-	{
-		while ((point = dequeue(path)))
-			queue_push_front(reverse_path, point);
-		free(path);
-	}
-	else
-	{
-		free(path);
-		free(reverse_path);
-		reverse_path = NULL;
-	}
-
-	for (i = 0; i < rows; i++)
-		free(mymap[i]);
-	free(mymap);
-
-	return (reverse_path);
+	return (1);
 }
 
 /**
- * backtrack - Recursively finds a path using backtracking
- * @map: 2D map
- * @rows: Number of rows
- * @cols: Number of columns
- * @target: Target point
- * @x: Current x coordinate
- * @y: Current y coordinate
- * @path: Queue to store the path
- *
- * Return: 1 if path is found, 0 if no path
+ * backtracker - recursive program that implements backtracking
+ * to find a path in a grid
+ * this function explores the grid from the current position (x, y)
+ * towards the target position
+ * @queue: a pointer to the queue where valid path points are stored
+ * @saw: a pointer to an array keeping track of visited cells
+ * @map: the 2D array representing the grid (1 = obstacle, 0 = free)
+ * @rows: the number of rows in the grid
+ * @cols: the number of columns in the grid
+ * @x: the current x-coordinate
+ * @y: the current y-coordinate
+ * @target: a pointer to the target position
+ * Return: 1 if the target is reached, 0 otherwise
  */
-int backtrack(char **map, int rows, int cols, point_t const *target,
-	      int x, int y, queue_t *path)
-{
-	point_t *point;
 
-	if (x < 0 || x >= cols || y < 0 || y >= rows || map[y][x] != '0')
+int backtracker(queue_t **queue, int *saw, char **map, int rows,
+		int cols, int x, int y, point_t const *target)
+{
+	int arr[][2] = {RIGHT, BOTTOM, LEFT, TOP}, i;
+
+	if (x < 0 || x >= cols || y < 0 || y >= rows ||
+	    map[y][x] == '1' || *(saw + y * cols + x) == 1)
 		return (0);
 
-	map[y][x] = '1';
-
-	point = calloc(1, sizeof(*point));
-	if (!point)
-		exit(1);
-
-	point->x = x;
-	point->y = y;
-
-	queue_push_front(path, point);
 	printf("Checking coordinates [%d, %d]\n", x, y);
 
 	if (x == target->x && y == target->y)
-		return (1);
+		return (point_push(queue, x, y));
 
-	if (backtrack(map, rows, cols, target, x + 1, y, path) ||
-	    backtrack(map, rows, cols, target, x, y + 1, path) ||
-	    backtrack(map, rows, cols, target, x - 1, y, path) ||
-	    backtrack(map, rows, cols, target, x, y - 1, path))
-		return (1);
+	*(saw + y * cols + x) = 1;
 
-	free(dequeue(path));
-
+	for (i = 0; i < 4; ++i)
+		if (backtracker(queue, saw, map, rows, cols,
+				x + arr[i][0], y + arr[i][1], target))
+			return (point_push(queue, x, y));
 	return (0);
+}
+
+/**
+ * backtracking_array - program that initializes and manages a backtracking
+ * search to find a path in a grid from start to target
+ * @map: the 2D array representing the grid
+ * @rows: the number of rows in the grid
+ * @cols: the number of columns in the grid
+ * @start: a pointer to the start position
+ * @target: a pointer to the target position
+ * Return: a pointer to the queue holding the path,
+ *         or NULL if no path is found or on error
+ */
+
+queue_t *backtracking_array(char **map, int rows, int cols,
+			    point_t const *start, point_t const *target)
+{
+	int *saw;
+	queue_t *queue;
+	int ret;
+
+	if (!map || !*map || !start || !target || rows < 1 || cols < 1)
+		return (NULL);
+
+	saw = calloc(rows * cols, sizeof(*saw));
+
+	if (!saw)
+		return (NULL);
+
+	queue = queue_create();
+
+	if (!queue)
+	{
+		free(saw);
+		return (NULL);
+	}
+	ret = backtracker(&queue, saw, map, rows, cols,
+			  start->x, start->y, target);
+	if (!ret)
+	{
+		queue_delete(queue);
+		queue = NULL;
+	}
+	free(saw);
+
+	return (queue);
 }
